@@ -22,6 +22,7 @@ library(readr)
 library(tmap)
 library(viridis)
 library(dplyr)
+library(stringr)
 
 library(tidycensus)
 library(tigris)
@@ -119,6 +120,12 @@ com_areas <- st_transform(com_areas, CRS.new)
 crimes_sf <- st_transform(crimes_sf, CRS.new)
 cta_rail_stations_sf <- st_transform(cta_rail_stations_sf, CRS.new)
 police_station_sf <- st_transform(police_station_sf, CRS.new)
+```
+
+```{r}
+cta_rail_stations_sf <- cta_rail_stations_sf %>%
+  left_join(cta_ridership_clean,
+            by = c("STATION_ID" = "RIDERSHIP_ID"))
 ```
 
 ## ESDA
@@ -269,4 +276,25 @@ tm_shape(com_areas) +
 ```
 
 Next, we want to go into ridership levels. Idea: also colorcode like above, with varying point colors.
+
+```{r}
+tm_shape(com_areas) +
+  tm_borders(col = "grey40") +
+  tm_shape(cta_rail_stations_sf) +
+  tm_symbols(
+    size = "total_rides_2025",        # <-- change to your ridership column name if different
+    col  = "total_rides_2025",        # optional: also color by ridership
+    palette = "viridis",        # uses viridis-style palette name
+    style = "quantile",         # good default for skewed ridership
+    alpha = 0.85,
+    title.size = "Ridership (2025)",
+    title.col  = "Ridership (2025)"
+  ) +
+  tm_layout(
+    main.title = "CTA Rail Station Ridership (2025)",
+    legend.outside = TRUE,
+    frame = FALSE
+  ) +
+  tm_scale_bar(position = c("left", "bottom"))
+```
 
