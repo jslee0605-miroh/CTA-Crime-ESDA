@@ -267,3 +267,6 @@ tm_shape(com_areas) +
   tm_scalebar(position = c("left", "bottom"),
     text.size = 0.5 )
 ```
+
+Next, we want to go into ridership levels. Idea: also colorcode like above, with varying point colors.
+
