@@ -162,3 +162,51 @@ tm_layout(
 
 ```
 
+Buffers:
+```{r}
+buffer_quarter_mi <- st_buffer(cta_rail_stations_sf, 0.25 * 5280)
+buffer_quarter_mi <- st_transform(buffer_quarter_mi, CRS.new)
+
+buffer_half_mi <- st_buffer(cta_rail_stations_sf, 0.5 * 5280)
+buffer_half_mi <- st_transform(buffer_half_mi, CRS.new)
+
+buffer_1_mi <- st_buffer(cta_rail_stations_sf, 5280)
+buffer_1_mi <- st_transform(buffer_1mi, CRS.new)
+```
+
+Buffer plots:
+```{r fig.height = 15}
+tmap_mode("plot")
+tm_shape(com_areas) + 
+  tm_borders() + 
+  tm_shape(cta_rail_stations_sf) + 
+  tm_dots(fill="red", size=1) + 
+  tm_shape(buffer_quarter_mi) + 
+  tm_fill(col = "blue", alpha = 0.1) + 
+  tm_borders(col = "blue") + 
+  tm_layout(
+    main.title = paste0("CTA Rail Stations: 0.25-mile Buffer"),
+    main.title.size = 1.5,
+    main.title.position = c("center", "top"),
+    legend.outside = TRUE,
+    bg.color = "white",    
+    frame = FALSE     
+  ) +   
+  tm_scalebar(position = c("left", "bottom"),
+    text.size = 0.5 )
+```
+
+Note: Do we want to get rid of the CTA Rail stations that are part of the network but technically outside of Chicago?
+
+Crime count in buffer:
+```{r}
+crime_025_buffer <- lengths(st_intersects(buffer_quarter_mi, crimes_sf))
+crime_05_buffer <- lengths(st_intersects(buffer_half_mi, crimes_sf))
+crime_1_buffer <- lengths(st_intersects(buffer_1_mi, crimes_sf))
+
+cta_rail_stations_sf$Crime_Count_025 <- crime_025_buffer
+cta_rail_stations_sf$Crime_Count_05  <- crime_05_buffer
+cta_rail_stations_sf$Crime_Count_1  <- crime_1_buffer
+
+#IMPORTANT: overlapping buffers count crime twice
+```
