@@ -1,0 +1,164 @@
+---
+title: "PBL Draft"
+author: "Andy, Blair, Julien"
+output: pdf_document
+date: "2026-02-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = TRUE)
+```
+
+## Library Downloads
+
+```{r}
+library(tidyverse)
+library(sf)
+library(units)
+library(readr)
+library(tmap)
+library(viridis)
+library(dplyr)
+
+library(tidycensus)
+library(tigris)
+options(tigris_use_cache = TRUE)
+CRS.new <- st_crs("EPSG:3435")
+```
+
+We are limiting this analysis to the year 2025. No way to actually filter CTA Rail data before download.
+
+## Data Retrieval
+
+```{r}
+crimes_raw <- st_read("crimes_2025.csv")
+cta_rail_stations <- st_read("cta_rail_stations.csv")
+```
+
+```{r}
+police_station_raw <- st_read("police_stations.csv")
+```
+
+```{r}
+cta_ridership_raw <- st_read("cta_rail_ridership.csv")
+```
+
+Load in polygon dataset:
+```{r}
+com_areas <- st_read("comm_area.geojson")
+```
+
+
+## Data Cleaning/Wrangling
+
+We need to filter CTA ridership data to just the year 2025. We also need to aggregate data, as ridership is currently broken down into months. 
+
+```{r}
+cta_ridership_clean <- cta_ridership_raw %>%
+  mutate(YEAR = as.integer(YEAR)) %>% 
+  filter(YEAR == 2025)
+
+cta_ridership_clean <- cta_ridership_clean %>%
+  mutate(TOTAL_RIDES = as.numeric(TOTAL_RIDES)) %>%  # ensure numeric
+  group_by(RIDERSHIP_ID, NAME) %>%
+  summarise(
+    total_rides_2025 = sum(TOTAL_RIDES, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_rides_2025))
+
+head(cta_ridership_clean)
+```
+
+```{r}
+head(crimes_raw)
+```
+
+We are also going to ignore crimes entries that have no location data (as otherwise, it is not possible to gauge whether it occurred within a buffer or not.) We also see that the datasets have latitude and longitude data but not point. We will convert to point data as well.
+
+Crimes:
+```{r}
+crimes_clean <- crimes_raw %>% select(-Location)
+
+crimes_clean <- crimes_clean %>%
+  mutate(Latitude = as.numeric(Latitude), Longitude = as.numeric(Longitude))
+
+crimes_clean <- crimes_clean %>% filter(!is.na(Latitude) & !is.na(Longitude)) # we go from 236549 observations to 236465
+
+crimes_sf <- crimes_clean %>%
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE)
+```
+
+Ridership:
+```{r}
+cta_rail_stations_sf <- cta_rail_stations %>%
+  st_as_sf(wkt = "the_geom", crs = 4326)
+```
+
+Police stations:
+```{r}
+police_station_clean <- police_station_raw %>% select(-LOCATION)
+
+police_station_clean <- police_station_clean %>%
+  mutate(LATITUDE = as.numeric(LATITUDE), LONGITUDE = as.numeric(LONGITUDE))
+
+police_station_clean <- police_station_clean %>% filter(!is.na(LATITUDE) & !is.na(LONGITUDE)) # we go from 236549 observations to 236465
+
+police_station_sf <- police_station_clean %>%
+  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326, remove = FALSE)
+
+```
+
+
+Transform to all use same CRS.
+```{r}
+com_areas <- st_transform(com_areas, CRS.new)
+crimes_sf <- st_transform(crimes_sf, CRS.new)
+cta_rail_stations_sf <- st_transform(cta_rail_stations_sf, CRS.new)
+police_station_sf <- st_transform(police_station_sf, CRS.new)
+```
+
+## ESDA
+
+First, plotting police stations + CTA rail stations.
+
+```{r}
+tmap_mode("plot")
+
+tm_shape(com_areas) + tm_borders() +
+  tm_shape(police_station_sf) + tm_symbols(fill = "blue", shape = 24, size = 0.5) +
+  tm_shape(cta_rail_stations_sf) + tm_symbols(fill = "red", size = 0.5) +
+tm_layout(
+    legend.outside = TRUE, 
+    legend.outside.position = "right", 
+    outer.margins = c(0.02, 0.02, 0.02, 0.18)) + 
+tm_layout(
+    main.title = paste0("Resource Points"),
+    main.title.size = 1.5,
+    main.title.position = c("center", "top"),
+    legend.outside = TRUE,
+    bg.color = "white",  
+    frame = FALSE          
+  ) +   
+  tm_scalebar(position = c("left", "bottom"),
+    text.size = 0.5 ) +
+  tm_add_legend(
+    type = "symbol",
+    labels = "CTA Rail Stations",
+    col = "red",
+    shape = 16,
+    size = 0.75
+) +
+  tm_add_legend(
+    type = "symbol",
+    labels = "Police Stations",
+    col = "blue",
+    shape = 17,
+    size = 0.75
+)
+
+```
+
