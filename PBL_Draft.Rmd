@@ -181,7 +181,7 @@ tm_shape(com_areas) +
   tm_borders() + 
   tm_shape(cta_rail_stations_sf) + 
   tm_dots(fill="red", size=1) + 
-  tm_shape(buffer_quarter_mi) + 
+  tm_shape(buffer_half_mi) + 
   tm_fill(col = "blue", alpha = 0.1) + 
   tm_borders(col = "blue") + 
   tm_layout(
@@ -211,7 +211,7 @@ cta_rail_stations_sf$crime_count_1  <- crime_1_buffer
 #IMPORTANT: overlapping buffers count crime twice
 ```
 
-Crime Exposure Visualization (with 0.25 mi buffer for now):
+Crime Exposure Visualization:
 ```{r}
 cta_rail_stations_sf <- cta_rail_stations_sf %>%
   mutate(
@@ -226,6 +226,21 @@ cta_rail_stations_sf <- cta_rail_stations_sf %>%
 exposure_025_buffer <- st_buffer(cta_rail_stations_sf, 0.25 * 5280)
 ```
 
+```{r}
+cta_rail_stations_sf <- cta_rail_stations_sf %>%
+  mutate(
+    crime_level_05 = case_when(
+      crime_count_05 >= quantile(crime_count_05, 0.75, na.rm = TRUE) ~ "High",
+      crime_count_05 >= quantile(crime_count_05, 0.25, na.rm = TRUE) ~ "Medium",
+      TRUE ~ "Low"
+    ),
+    crime_level_05 = factor(crime_level_05, levels = c("Low", "Medium", "High"))
+  )
+
+exposure_05_buffer <- st_buffer(cta_rail_stations_sf, 0.5 * 5280)
+```
+
+
 
 ```{r}
 tmap_mode("plot")
@@ -233,16 +248,16 @@ tm_shape(com_areas) +
   tm_borders() + 
   tm_shape(cta_rail_stations_sf) + 
   tm_dots(fill="black", size=0.25) + 
-  tm_shape(exposure_025_buffer) + 
+  tm_shape(exposure_05_buffer) + 
   tm_fill(
-    col = "crime_level_025",
+    col = "crime_level_05",
     palette = c("green", "yellow", "red"),
     title = "Crime Level",
     border.col = NA,
     alpha = 0.5
   ) + 
   tm_layout(
-    main.title = paste0("CTA Rail Stations: 0.25-mile Buffer"),
+    main.title = paste0("CTA Rail Stations: 0.5-mile Buffer"),
     main.title.size = 1.5,
     main.title.position = c("center", "top"),
     legend.outside = TRUE,
