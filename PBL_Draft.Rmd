@@ -171,7 +171,7 @@ buffer_half_mi <- st_buffer(cta_rail_stations_sf, 0.5 * 5280)
 buffer_half_mi <- st_transform(buffer_half_mi, CRS.new)
 
 buffer_1_mi <- st_buffer(cta_rail_stations_sf, 5280)
-buffer_1_mi <- st_transform(buffer_1mi, CRS.new)
+buffer_1_mi <- st_transform(buffer_1_mi, CRS.new)
 ```
 
 Buffer plots:
