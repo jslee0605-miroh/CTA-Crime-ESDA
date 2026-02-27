@@ -264,7 +264,7 @@ tm_shape(com_areas) +
     alpha = 0.5
   ) + 
   tm_layout(
-    main.title = paste0("CTA Rail Stations: 0.5-mile Buffer"),
+    main.title = paste0("CTA Rail Stations Crime Exposure: 0.5-mile Buffer"),
     main.title.size = 1.5,
     main.title.position = c("center", "top"),
     legend.outside = TRUE,
