@@ -8,7 +8,7 @@ date: "2026-02-27"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  message = FALSE,
+  message = TRUE,
   warning = TRUE)
 ```
 
@@ -19,6 +19,8 @@ library(tidyverse)
 library(sf)
 library(units)
 library(readr)
+library(purrr)
+library(RColorBrewer)
 library(tmap)
 library(viridis)
 library(dplyr)
@@ -50,6 +52,7 @@ cta_ridership_raw <- st_read("cta_rail_ridership.csv")
 Load in polygon dataset:
 ```{r}
 com_areas <- st_read("comm_area.geojson")
+chicago_union <- st_union(com_areas) # using this to get rid of CTA stations outside of Chicago
 ```
 
 
@@ -97,6 +100,9 @@ Ridership:
 ```{r}
 cta_rail_stations_sf <- cta_rail_stations %>%
   st_as_sf(wkt = "the_geom", crs = 4326)
+
+cta_rail_stations_sf <- cta_rail_stations_sf %>%
+  st_filter(chicago_union, .predicate = st_within)
 ```
 
 Police stations:
@@ -182,7 +188,7 @@ buffer_1_mi <- st_transform(buffer_1_mi, CRS.new)
 ```
 
 Buffer plots:
-```{r fig.height = 15}
+```{r fig.height = 12}
 tmap_mode("plot")
 tm_shape(com_areas) + 
   tm_borders() + 
@@ -200,10 +206,13 @@ tm_shape(com_areas) +
     frame = FALSE     
   ) +   
   tm_scalebar(position = c("left", "bottom"),
-    text.size = 0.5 )
+    text.size = 1.5 )
 ```
 
 Note: Do we want to get rid of the CTA Rail stations that are part of the network but technically outside of Chicago?
+
+Andy - I think we definitely could, but I'm not exactly sure how to do that in R.
+Edit - I fixed it above
 
 Crime count in buffer:
 ```{r}
@@ -217,6 +226,22 @@ cta_rail_stations_sf$crime_count_1  <- crime_1_buffer
 
 #IMPORTANT: overlapping buffers count crime twice
 ```
+
+Police station count in buffer:
+
+```{r}
+police_025_buffer <- lengths(st_intersects(buffer_quarter_mi, police_station_sf))
+police_05_buffer <- lengths(st_intersects(buffer_half_mi, police_station_sf))
+police_1_buffer <- lengths(st_intersects(buffer_1_mi, police_station_sf))
+
+cta_rail_stations_sf$police_count_025 <- police_025_buffer
+cta_rail_stations_sf$police_count_05 <- police_05_buffer
+cta_rail_stations_sf$police_count_1 <- police_1_buffer
+
+# From this, only 1 CTA stations has more than 1 police station within a mile radius
+# will use 1 mile buffer for police station analysis
+```
+
 
 Crime Exposure Visualization:
 ```{r}
@@ -237,17 +262,21 @@ exposure_025_buffer <- st_buffer(cta_rail_stations_sf, 0.25 * 5280)
 cta_rail_stations_sf <- cta_rail_stations_sf %>%
   mutate(
     crime_level_05 = case_when(
-      crime_count_05 >= quantile(crime_count_05, 0.75, na.rm = TRUE) ~ "High",
-      crime_count_05 >= quantile(crime_count_05, 0.25, na.rm = TRUE) ~ "Medium",
-      TRUE ~ "Low"
+      crime_count_05 >= quantile(crime_count_05, 0.8, na.rm = TRUE) ~ "Very High",
+      crime_count_05 >= quantile(crime_count_05, 0.6, na.rm = TRUE) ~ "High",
+      crime_count_05 >= quantile(crime_count_05, 0.4, na.rm = TRUE) ~ "Moderate",
+      crime_count_05 >= quantile(crime_count_05, 0.2, na.rm = TRUE) ~ "Low",
+      crime_count_05 >= quantile(crime_count_05, 0, na.rm = TRUE) ~ "Very Low",
     ),
-    crime_level_05 = factor(crime_level_05, levels = c("Low", "Medium", "High"))
+    crime_level_05 = factor(crime_level_05, levels = c("Very High", "High", "Moderate", "Low", "Very Low"))
   )
 
 exposure_05_buffer <- st_buffer(cta_rail_stations_sf, 0.5 * 5280)
 ```
 
-
+```{r}
+sum(is.na(cta_rail_stations_sf$crime_level_05))
+```
 
 ```{r}
 tmap_mode("plot")
@@ -258,13 +287,13 @@ tm_shape(com_areas) +
   tm_shape(exposure_05_buffer) + 
   tm_fill(
     col = "crime_level_05",
-    palette = c("green", "yellow", "red"),
-    title = "Crime Level",
+    palette = rev(brewer.pal(5, "YlOrRd")),
+    title = "Crime Count",
     border.col = NA,
     alpha = 0.5
   ) + 
   tm_layout(
-    main.title = paste0("CTA Rail Stations Crime Exposure: 0.5-mile Buffer"),
+    main.title = paste0("CTA Rail Stations Crime Count: 0.5-mile Buffer"),
     main.title.size = 1.5,
     main.title.position = c("center", "top"),
     legend.outside = TRUE,
@@ -275,6 +304,124 @@ tm_shape(com_areas) +
     text.size = 0.5 )
 ```
 
+```{r}
+cta_rail_stations_sf <- cta_rail_stations_sf %>%
+  mutate(
+    # rate per 10,000 riders (avoid divide-by-zero)
+    crime_rate_05 = ifelse(total_rides_2025 > 0,
+                           (crime_count_05 / total_rides_2025) * 10000,
+                           NA_real_),
+
+    # 5-quantile bins (20% each)
+    crime_rate_level_05 = cut(
+      crime_rate_05,
+      breaks = quantile(crime_rate_05, probs = seq(0, 1, 0.2), na.rm = TRUE),
+      include.lowest = TRUE,
+      labels = c("Very Low", "Low", "Moderate", "High", "Very High"),
+    ),
+    
+    crime_rate_level_05 = factor(
+      crime_rate_level_05,
+      levels = c("Very High", "High", "Moderate", "Low", "Very Low"),
+      ordered = TRUE
+    )
+  )
+
+exposure_05_buffer <- st_buffer(cta_rail_stations_sf, 0.5 * 5280)
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(com_areas) + 
+  tm_borders() + 
+  tm_shape(cta_rail_stations_sf) + 
+  tm_dots(fill="black", size=0.25) + 
+  tm_shape(exposure_05_buffer) + 
+  tm_fill(
+    col = "crime_rate_level_05",
+    palette = rev(brewer.pal(5, "YlOrRd")),
+    title = "Crime Rate",
+    border.col = NA,
+    alpha = 0.5
+  ) + 
+  tm_layout(
+    main.title = paste0("CTA Rail Stations Crime Rate: 0.5-mile Buffer"),
+    main.title.size = 1.5,
+    main.title.position = c("center", "top"),
+    legend.outside = TRUE,
+    bg.color = "white",    
+    frame = FALSE     
+  ) +   
+  tm_scalebar(position = c("left", "bottom"),
+    text.size = 0.5 )
+```
+Filtering for Police Stations within a 1 mile radius
+```{r}
+cta_with_police <- cta_rail_stations_sf %>%
+    filter(police_count_1 >= 1)
+
+exposure_05_buffer_police <- st_buffer(cta_with_police, 0.5 * 5280)
+
+cta_wo_police <- cta_rail_stations_sf %>%
+    filter(police_count_1 == 0)
+
+exposure_05_buffer_no_police <- st_buffer(cta_wo_police, 0.5 * 5280)
+```
+
+Crime exposure map filtered for police stations nearby:
+```{r}
+tmap_mode("plot")
+tm_shape(com_areas) + 
+  tm_borders() + 
+  tm_shape(cta_rail_stations_sf) + 
+  tm_dots(fill="black", size=0.25) + 
+  tm_shape(exposure_05_buffer_police) + 
+  tm_fill(
+    col = "crime_level_05",
+    palette = rev(brewer.pal(5, "YlOrRd")),
+    title = "Crime Level",
+    border.col = NA,
+    alpha = 0.5
+  ) + 
+  tm_layout(
+    main.title = paste0("CTA Rail Stations Crime Exposure: 0.5-mile Buffer with a Police Station Nearby"),
+    main.title.size = 1.5,
+    main.title.position = c("center", "top"),
+    legend.outside = TRUE,
+    bg.color = "white",    
+    frame = FALSE     
+  ) +   
+  tm_scalebar(position = c("left", "bottom"),
+    text.size = 0.5 )
+```
+Crime Exposure Map w/o police stations nearby:
+```{r}
+tmap_mode("plot")
+tm_shape(com_areas) + 
+  tm_borders() + 
+  tm_shape(cta_rail_stations_sf) + 
+  tm_dots(fill="black", size=0.25) + 
+  tm_shape(exposure_05_buffer_no_police) + 
+  tm_fill(
+    col = "crime_level_05",
+    palette = rev(brewer.pal(5, "YlOrRd")),
+    title = "Crime Level",
+    border.col = NA,
+    alpha = 0.5
+  ) + 
+  tm_layout(
+    main.title = paste0("CTA Rail Stations Crime Exposure: 0.5-mile Buffer without a Police Station Nearby"),
+    main.title.size = 1.5,
+    main.title.position = c("center", "top"),
+    legend.outside = TRUE,
+    bg.color = "white",    
+    frame = FALSE     
+  ) +   
+  tm_scalebar(position = c("left", "bottom"),
+    text.size = 0.5 )
+```
+
+
 Next, we want to go into ridership levels. Idea: also colorcode like above, with varying point colors.
 
 ```{r}
@@ -282,10 +429,10 @@ tm_shape(com_areas) +
   tm_borders(col = "grey40") +
   tm_shape(cta_rail_stations_sf) +
   tm_symbols(
-    size = "total_rides_2025",        # <-- change to your ridership column name if different
-    col  = "total_rides_2025",        # optional: also color by ridership
-    palette = "viridis",        # uses viridis-style palette name
-    style = "quantile",         # good default for skewed ridership
+    size = "total_rides_2025",     
+    col  = "total_rides_2025",   
+    palette = "viridis",    
+    style = "quantile",        
     alpha = 0.85,
     title.size = "Ridership (2025)",
     title.col  = "Ridership (2025)"
@@ -297,4 +444,81 @@ tm_shape(com_areas) +
   ) +
   tm_scale_bar(position = c("left", "bottom"))
 ```
+
+```{r}
+nearest_police_idx <- st_nearest_feature(cta_rail_stations_sf, police_station_sf)
+
+# compute minimum distance
+min_dist <- st_distance(
+  cta_rail_stations_sf,
+  police_station_sf[nearest_police_idx, ],
+  by_element = TRUE
+)
+
+cta_rail_stations_sf <- cta_rail_stations_sf %>%
+  mutate(
+    min_dist_police = as.numeric(min_dist),
+    min_dist_police_miles = min_dist_police / 5280
+  )
+
+```
+
+```{r}
+tmap_mode("plot")
+
+tm_shape(com_areas) +
+  tm_borders() +
+tm_shape(cta_rail_stations_sf) +
+  tm_dots(
+    fill = "min_dist_police_miles",          # <-- map fill, not col
+    fill.scale = tm_scale_intervals(
+      n = 5,
+      style = "quantile",
+      values = "-Oranges"
+    ),
+    fill.legend = tm_legend(title = "Min Distance (mi)"),
+    size = 0.5
+  ) +
+tm_layout(
+  main.title = "CTA Stations: Distance to Nearest Police Station",
+  legend.outside = TRUE,
+  frame = FALSE
+) +
+tm_scalebar(position = c("left", "bottom"), text.size = 0.5)
+```
+
+
+## Non-Spatial EDA
+
+Regression with Crime Count 05 and 2025 Ridership
+
+```{r}
+plot(cta_rail_stations_sf$crime_count_05,
+     cta_rail_stations_sf$total_rides_2025,
+     pch = 19,
+     col = "darkgray",
+     xlab = "Crime Count within 0.5 Miles",
+     ylab = "Ridership (2025)",
+     main = "CTA 2025 Ridership vs Crime Exposure")
+model <- lm(total_rides_2025 ~ crime_count_05, data = cta_rail_stations_sf)
+abline(model, col = "blue", lwd = 2)
+model_sum = summary(model)
+r2 = model_sum$r.squared
+slope <- model_sum$coefficients[2, 1]
+p_value <- model_sum$coefficients[2, 4]
+legend("topright",
+       legend = c(
+         paste0("R^2 = ", round(r2, 3)),
+         paste0("Slope = ", round(slope, 3)),
+         paste0("p = ", signif(p_value, 3))
+       ),
+       bty = "n")
+```
+Todo: 
+- OD Data
+- Choropleth plot for crime
+- Choropleth plot for Ridership
+- Mindist avg for police stations to cta
+
+
 
