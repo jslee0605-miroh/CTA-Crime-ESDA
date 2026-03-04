@@ -21,6 +21,7 @@ library(units)
 library(readr)
 library(purrr)
 library(RColorBrewer)
+library(data.table)
 library(tmap)
 library(viridis)
 library(dplyr)
@@ -520,5 +521,7 @@ Todo:
 - Choropleth plot for Ridership
 - Mindist avg for police stations to cta
 
-
+```{r}
+od <- fread("od_illinois.csv")
+```
 
