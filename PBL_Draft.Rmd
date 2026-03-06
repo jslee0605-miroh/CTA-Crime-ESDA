@@ -247,7 +247,7 @@ initial_buffer_map <- tm_shape(com_areas) +
   tm_scalebar(position = c("left", "bottom"),
     text.size = 1.5 )
 
-  tmap_save(buffer, "crime_map_05.png", width = 8, height = 6, units = "in", dpi = 300)
+  tmap_save(initial_buffer_map, "initial_buffer_map.png", width = 8, height = 6, units = "in", dpi = 300)
 ```
 
 Crime count in buffer:
@@ -314,7 +314,7 @@ First, we create a map to see how many relevant crimes are committed in the 0.5 
 
 ```{r}
 tmap_mode("plot")
-tm_shape(com_areas) + 
+crime_count_map <- tm_shape(com_areas) + 
   tm_borders() + 
   tm_shape(cta_rail_stations_sf) + 
   tm_dots(fill="black", size=0.25) + 
@@ -337,6 +337,9 @@ tm_shape(com_areas) +
   ) +   
   tm_scalebar(position = c("left", "bottom"),
     text.size = 0.5 )
+
+tmap_save(crime_count_map, "crime_count_map.png", width = 8, height = 6, units = "in", dpi = 300)
+crime_count_map
 ```
 
 ```{r}
@@ -369,7 +372,7 @@ In an attempt to see how many relevant crimes were being committed relative to t
 
 ```{r}
 tmap_mode("plot")
-tm_shape(com_areas) + 
+crime_rate_map <- tm_shape(com_areas) + 
   tm_borders() + 
   tm_shape(cta_rail_stations_sf) + 
   tm_dots(fill="black", size=0.25) + 
@@ -392,6 +395,9 @@ tm_shape(com_areas) +
   ) +   
   tm_scalebar(position = c("left", "bottom"),
     text.size = 0.5 )
+
+tmap_save(crime_rate_map, "crime_rate_map.png", width = 8, height = 6, units = "in", dpi = 300)
+crime_rate_map
 ```
 Filtering for Police Stations within a 1 mile radius
 ```{r}
@@ -409,7 +415,7 @@ exposure_05_buffer_no_police <- st_buffer(cta_wo_police, 0.5 * 5280)
 Crime exposure map filtered for police stations nearby:
 ```{r}
 tmap_mode("plot")
-tm_shape(com_areas) + 
+police_station_nearby_map <- tm_shape(com_areas) + 
   tm_borders() + 
   tm_shape(cta_rail_stations_sf) + 
   tm_dots(fill="black", size=0.25) + 
@@ -432,11 +438,14 @@ tm_shape(com_areas) +
   ) +   
   tm_scalebar(position = c("left", "bottom"),
     text.size = 0.5 )
+
+tmap_save(police_station_nearby_map, "police_station_nearby_map.png", width = 8, height = 6, units = "in", dpi = 300)
+police_station_nearby_map
 ```
 Crime Exposure Map w/o police stations nearby:
 ```{r}
 tmap_mode("plot")
-tm_shape(com_areas) + 
+police_station_not_nearby_map <- tm_shape(com_areas) + 
   tm_borders() + 
   tm_shape(cta_rail_stations_sf) + 
   tm_dots(fill="black", size=0.25) + 
@@ -459,6 +468,9 @@ tm_shape(com_areas) +
   ) +   
   tm_scalebar(position = c("left", "bottom"),
     text.size = 0.5 )
+
+tmap_save(police_station_not_nearby_map, "police_station_not_nearby_map.png", width = 8, height = 6, units = "in", dpi = 300)
+police_station_not_nearby_map
 ```
 
 
@@ -483,7 +495,7 @@ cta_rail_stations_sf <- cta_rail_stations_sf %>%
 ```{r}
 tmap_mode("plot")
 
-tm_shape(com_areas) +
+dist_to_police <- tm_shape(com_areas) +
   tm_borders() +
 tm_shape(cta_rail_stations_sf) +
   tm_dots(
@@ -502,6 +514,9 @@ tm_layout(
   frame = FALSE
 ) +
 tm_scalebar(position = c("left", "bottom"), text.size = 0.5)
+
+tmap_save(dist_to_police, "dist_to_police.png", width = 8, height = 6, units = "in", dpi = 300)
+dist_to_police
 ```
 
 
@@ -510,7 +525,8 @@ tm_scalebar(position = c("left", "bottom"), text.size = 0.5)
 Regression with Crime Count 05 and 2025 Ridership
 
 ```{r}
-plot(cta_rail_stations_sf$crime_count_05,
+png("ridership_vs_crimecount.png", width = 2000, height = 1500, res = 300)
+ridership_v_crimecount <- plot(cta_rail_stations_sf$crime_count_05,
      cta_rail_stations_sf$total_rides_2025 / 1e6,
      pch = 19,
      col = "darkgray",
@@ -532,9 +548,12 @@ legend("topright",
          paste0("p = ", signif(p_value, 3))
        ),
        bty = "n")
+dev.off()
+ridership_v_crimecount
 ```
 Scatter Plot for Minimum distance vs Crime Count
 ```{r}
+png("mindist_v_crimecount.png", width = 2000, height = 1500, res = 300)
 plot(cta_rail_stations_sf$min_dist_police_miles,
      cta_rail_stations_sf$crime_rate_05,
      pch = 19,
@@ -555,4 +574,5 @@ legend("topright",
          paste0("p = ", signif(p_value, 3))
        ),
        bty = "n")
+dev.off()
 ```
