@@ -8,8 +8,9 @@ date: "2026-02-27"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  message = TRUE,
-  warning = TRUE)
+  quiet = TRUE,
+  message = FALSE,
+  warning = FALSE)
 ```
 
 ## Library Downloads
@@ -500,7 +501,7 @@ plot(cta_rail_stations_sf$crime_count_05,
      col = "darkgray",
      xlab = "Crime Count within 0.5 Miles",
      ylab = "Ridership (2025)",
-     main = "CTA 2025 Ridership vs Crime Exposure")
+     main = "CTA 2025 Ridership vs Crime Count")
 model <- lm(total_rides_2025 ~ crime_count_05, data = cta_rail_stations_sf)
 abline(model, col = "blue", lwd = 2)
 model_sum = summary(model)
@@ -515,13 +516,26 @@ legend("topright",
        ),
        bty = "n")
 ```
-Todo: 
-- OD Data
-- Choropleth plot for crime
-- Choropleth plot for Ridership
-- Mindist avg for police stations to cta
-
+Scatter Plot for Minimum distance vs Crime Count
 ```{r}
-od <- fread("od_illinois.csv")
+plot(cta_rail_stations_sf$min_dist_police_miles,
+     cta_rail_stations_sf$crime_rate_05,
+     pch = 19,
+     col = "darkgray",
+     xlab = "CTA Station Distance from Nearest Police Station",
+     ylab = "Crime Rate within 0.5 miles",
+     main = "Crime Rate vs. Police Station Minimum Distance")
+model <- lm(crime_rate_05 ~ min_dist_police_miles, data = cta_rail_stations_sf)
+abline(model, col = "blue", lwd = 2)
+model_sum = summary(model)
+r2 = model_sum$r.squared
+slope <- model_sum$coefficients[2, 1]
+p_value <- model_sum$coefficients[2, 4]
+legend("topright",
+       legend = c(
+         paste0("R^2 = ", round(r2, 3)),
+         paste0("Slope = ", round(slope, 3)),
+         paste0("p = ", signif(p_value, 3))
+       ),
+       bty = "n")
 ```
-
