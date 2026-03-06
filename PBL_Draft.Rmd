@@ -34,29 +34,21 @@ options(tigris_use_cache = TRUE)
 CRS.new <- st_crs("EPSG:3435")
 ```
 
-We are limiting this analysis to the year 2025. No way to actually filter CTA Rail data before download.
-
 ## Data Retrieval
 
+Reading in data for crime in 2025, CTA rail station locations, police station locations, and CTA ridership totals.
 ```{r}
 crimes_raw <- st_read("crimes_2025.csv")
 cta_rail_stations <- st_read("cta_rail_stations.csv")
-```
-
-```{r}
 police_station_raw <- st_read("police_stations.csv")
-```
-
-```{r}
 cta_ridership_raw <- st_read("cta_rail_ridership.csv")
 ```
 
-Load in polygon dataset:
+We are using the Chicago community areas. 
 ```{r}
 com_areas <- st_read("comm_area.geojson")
 chicago_union <- st_union(com_areas) # using this to get rid of CTA stations outside of Chicago
 ```
-
 
 ## Data Cleaning/Wrangling
 
@@ -98,6 +90,24 @@ crimes_sf <- crimes_clean %>%
   st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE)
 ```
 
+Additionally, we will limit crime to those that directly impact people that would be utilizing the CTA stations. For example, we would consider battery but not vehicle theft.
+
+```{r}
+primary_type_values <- unique(crimes_sf$"Primary.Type")
+
+primary_type_values
+```
+
+We will focus on crimes that impact public perception and create fear, such as robbery, battery, assault, etc.
+
+```{r}
+relevant_crimes <- c("SEX OFFENSE", "THEFT", "BATTERY", "MOTOR VEHICLE THEFT", "CRIMINAL SEXUAL ASSAULT", "ASSAULT", "WEAPONS VIOLATION", "ROBBERY", "PUBLIC PEACE VIOLATION", "NARCOTICS", "KIDNAPPING", "INTIMIDATION", "HOMICIDE", "PUBLIC INDECENCY", "HUMAN TRAFFICKING")
+
+crimes_sf <- crimes_sf %>%
+  filter(`Primary.Type` %in% relevant_crimes)
+```
+
+
 Ridership:
 ```{r}
 cta_rail_stations_sf <- cta_rail_stations %>%
@@ -121,7 +131,6 @@ police_station_sf <- police_station_clean %>%
 
 ```
 
-
 Transform to all use same CRS.
 ```{r}
 com_areas <- st_transform(com_areas, CRS.new)
@@ -138,12 +147,12 @@ cta_rail_stations_sf <- cta_rail_stations_sf %>%
 
 ## ESDA
 
-First, plotting police stations + CTA rail stations.
+First, we plot police stations and CTA rail stations.
 
 ```{r}
 tmap_mode("plot")
 
-tm_shape(com_areas) + tm_borders() +
+resources_map <- tm_shape(com_areas) + tm_borders() +
   tm_shape(police_station_sf) + tm_symbols(fill = "blue", shape = 24, size = 0.5) +
   tm_shape(cta_rail_stations_sf) + tm_symbols(fill = "red", size = 0.5) +
 tm_layout(
@@ -174,8 +183,36 @@ tm_layout(
     shape = 17,
     size = 0.75
 )
-
+tmap_save(resources_map, "resources.png", width = 8, height = 8, units = "in", dpi = 300)
 ```
+
+Next, we want to go into ridership levels. 
+
+```{r}
+ridership_map <- tm_shape(com_areas) +
+  tm_borders(col = "grey40") +
+  tm_shape(cta_rail_stations_sf) +
+  tm_symbols(
+    size = "total_rides_2025",     
+    col  = "total_rides_2025",   
+    palette = "viridis",    
+    style = "quantile",        
+    alpha = 0.85,    
+    border.col = "black",
+    border.alpha = 0.2,
+    title.size = "Ridership (2025)",
+    title.col  = "Ridership (2025)"
+  ) +
+  tm_layout(
+    main.title = "CTA Rail Station Ridership (2025)",
+    legend.outside = TRUE,
+    frame = FALSE
+  ) +
+  tm_scale_bar(position = c("left", "bottom"))
+
+  tmap_save(ridership_map, "ridership_map.png", width = 9, height = 8, units = "in", dpi = 300)
+```
+
 
 Buffers:
 ```{r}
@@ -192,7 +229,7 @@ buffer_1_mi <- st_transform(buffer_1_mi, CRS.new)
 Buffer plots:
 ```{r fig.height = 12}
 tmap_mode("plot")
-tm_shape(com_areas) + 
+initial_buffer_map <- tm_shape(com_areas) + 
   tm_borders() + 
   tm_shape(cta_rail_stations_sf) + 
   tm_dots(fill="red", size=1) + 
@@ -209,12 +246,9 @@ tm_shape(com_areas) +
   ) +   
   tm_scalebar(position = c("left", "bottom"),
     text.size = 1.5 )
+
+  tmap_save(buffer, "crime_map_05.png", width = 8, height = 6, units = "in", dpi = 300)
 ```
-
-Note: Do we want to get rid of the CTA Rail stations that are part of the network but technically outside of Chicago?
-
-Andy - I think we definitely could, but I'm not exactly sure how to do that in R.
-Edit - I fixed it above
 
 Crime count in buffer:
 ```{r}
@@ -276,9 +310,7 @@ cta_rail_stations_sf <- cta_rail_stations_sf %>%
 exposure_05_buffer <- st_buffer(cta_rail_stations_sf, 0.5 * 5280)
 ```
 
-```{r}
-sum(is.na(cta_rail_stations_sf$crime_level_05))
-```
+First, we create a map to see how many relevant crimes are committed in the 0.5 mile buffer.
 
 ```{r}
 tmap_mode("plot")
@@ -291,7 +323,8 @@ tm_shape(com_areas) +
     col = "crime_level_05",
     palette = rev(brewer.pal(5, "YlOrRd")),
     title = "Crime Count",
-    border.col = NA,
+      border.col = "black",
+    border.alpha = 0.2,
     alpha = 0.5
   ) + 
   tm_layout(
@@ -332,6 +365,8 @@ cta_rail_stations_sf <- cta_rail_stations_sf %>%
 exposure_05_buffer <- st_buffer(cta_rail_stations_sf, 0.5 * 5280)
 ```
 
+In an attempt to see how many relevant crimes were being committed relative to the number of people actually using the stop, we also created a map for crime rate, measured by raw crime count divided by ridership at that given station.
+
 ```{r}
 tmap_mode("plot")
 tm_shape(com_areas) + 
@@ -343,7 +378,8 @@ tm_shape(com_areas) +
     col = "crime_rate_level_05",
     palette = rev(brewer.pal(5, "YlOrRd")),
     title = "Crime Rate",
-    border.col = NA,
+    border.col = "black",
+    border.alpha = 0.2,
     alpha = 0.5
   ) + 
   tm_layout(
@@ -382,7 +418,8 @@ tm_shape(com_areas) +
     col = "crime_level_05",
     palette = rev(brewer.pal(5, "YlOrRd")),
     title = "Crime Level",
-    border.col = NA,
+        border.col = "black",
+    border.alpha = 0.2,
     alpha = 0.5
   ) + 
   tm_layout(
@@ -408,7 +445,8 @@ tm_shape(com_areas) +
     col = "crime_level_05",
     palette = rev(brewer.pal(5, "YlOrRd")),
     title = "Crime Level",
-    border.col = NA,
+        border.col = "black",
+    border.alpha = 0.2,
     alpha = 0.5
   ) + 
   tm_layout(
@@ -423,29 +461,6 @@ tm_shape(com_areas) +
     text.size = 0.5 )
 ```
 
-
-Next, we want to go into ridership levels. Idea: also colorcode like above, with varying point colors.
-
-```{r}
-tm_shape(com_areas) +
-  tm_borders(col = "grey40") +
-  tm_shape(cta_rail_stations_sf) +
-  tm_symbols(
-    size = "total_rides_2025",     
-    col  = "total_rides_2025",   
-    palette = "viridis",    
-    style = "quantile",        
-    alpha = 0.85,
-    title.size = "Ridership (2025)",
-    title.col  = "Ridership (2025)"
-  ) +
-  tm_layout(
-    main.title = "CTA Rail Station Ridership (2025)",
-    legend.outside = TRUE,
-    frame = FALSE
-  ) +
-  tm_scale_bar(position = c("left", "bottom"))
-```
 
 ```{r}
 nearest_police_idx <- st_nearest_feature(cta_rail_stations_sf, police_station_sf)
@@ -496,13 +511,15 @@ Regression with Crime Count 05 and 2025 Ridership
 
 ```{r}
 plot(cta_rail_stations_sf$crime_count_05,
-     cta_rail_stations_sf$total_rides_2025,
+     cta_rail_stations_sf$total_rides_2025 / 1e6,
      pch = 19,
      col = "darkgray",
      xlab = "Crime Count within 0.5 Miles",
-     ylab = "Ridership (2025)",
-     main = "CTA 2025 Ridership vs Crime Count")
-model <- lm(total_rides_2025 ~ crime_count_05, data = cta_rail_stations_sf)
+     ylab = "Ridership in Millions (2025)",
+     main = "CTA 2025 Ridership vs Crime Count",
+     yaxt = "n")
+axis(2, at = 0:3, labels = 0:3)
+model <- lm(total_rides_2025/1e6 ~ crime_count_05, data = cta_rail_stations_sf)
 abline(model, col = "blue", lwd = 2)
 model_sum = summary(model)
 r2 = model_sum$r.squared
