@@ -13,24 +13,16 @@ knitr::opts_chunk$set(
   warning = FALSE)
 ```
 
+If needed, we kept all code + datasets + images at this link: https://github.com/jslee0605-miroh/CTA-Crime-ESDA
+
 ## Library Downloads
 
 ```{r}
-library(tidyverse)
 library(sf)
-library(units)
-library(readr)
-library(purrr)
 library(RColorBrewer)
-library(data.table)
 library(tmap)
 library(viridis)
 library(dplyr)
-library(stringr)
-
-library(tidycensus)
-library(tigris)
-options(tigris_use_cache = TRUE)
 CRS.new <- st_crs("EPSG:3435")
 ```
 
@@ -184,6 +176,7 @@ tm_layout(
     size = 0.75
 )
 tmap_save(resources_map, "resources.png", width = 8, height = 8, units = "in", dpi = 300)
+resources_map
 ```
 
 Next, we want to go into ridership levels. 
@@ -208,9 +201,10 @@ ridership_map <- tm_shape(com_areas) +
     legend.outside = TRUE,
     frame = FALSE
   ) +
-  tm_scale_bar(position = c("left", "bottom"))
+  tm_scale_bar(position = c("left", "bottom"), size=2)
 
-  tmap_save(ridership_map, "ridership_map.png", width = 9, height = 8, units = "in", dpi = 300)
+  tmap_save(ridership_map, "ridership_map.png", width = 9, height = 7, units = "in", dpi = 300)
+  ridership_map
 ```
 
 
@@ -248,6 +242,7 @@ initial_buffer_map <- tm_shape(com_areas) +
     text.size = 1.5 )
 
   tmap_save(initial_buffer_map, "initial_buffer_map.png", width = 8, height = 6, units = "in", dpi = 300)
+  initial_buffer_map
 ```
 
 Crime count in buffer:
@@ -527,15 +522,13 @@ Regression with Crime Count 05 and 2025 Ridership
 ```{r}
 png("ridership_vs_crimecount.png", width = 2000, height = 1500, res = 300)
 ridership_v_crimecount <- plot(cta_rail_stations_sf$crime_count_05,
-     cta_rail_stations_sf$total_rides_2025 / 1e6,
+     cta_rail_stations_sf$total_rides_2025,
      pch = 19,
      col = "darkgray",
      xlab = "Crime Count within 0.5 Miles",
-     ylab = "Ridership in Millions (2025)",
-     main = "CTA 2025 Ridership vs Crime Count",
-     yaxt = "n")
-axis(2, at = 0:3, labels = 0:3)
-model <- lm(total_rides_2025/1e6 ~ crime_count_05, data = cta_rail_stations_sf)
+     ylab = "Ridership (2025)",
+     main = "CTA 2025 Ridership vs Crime Count")
+model <- lm(total_rides_2025 ~ crime_count_05, data = cta_rail_stations_sf)
 abline(model, col = "blue", lwd = 2)
 model_sum = summary(model)
 r2 = model_sum$r.squared
@@ -553,7 +546,7 @@ ridership_v_crimecount
 ```
 Scatter Plot for Minimum distance vs Crime Count
 ```{r}
-png("mindist_v_crimecount.png", width = 2000, height = 1500, res = 300)
+png("mindist_v_crimerate.png", width = 2000, height = 1500, res = 300)
 plot(cta_rail_stations_sf$min_dist_police_miles,
      cta_rail_stations_sf$crime_rate_05,
      pch = 19,
@@ -561,6 +554,7 @@ plot(cta_rail_stations_sf$min_dist_police_miles,
      xlab = "CTA Station Distance from Nearest Police Station",
      ylab = "Crime Rate within 0.5 miles",
      main = "Crime Rate vs. Police Station Minimum Distance")
+axis(2, at = 0:3, labels = 0:3)
 model <- lm(crime_rate_05 ~ min_dist_police_miles, data = cta_rail_stations_sf)
 abline(model, col = "blue", lwd = 2)
 model_sum = summary(model)
@@ -576,3 +570,5 @@ legend("topright",
        bty = "n")
 dev.off()
 ```
+
+
